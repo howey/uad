@@ -302,16 +302,16 @@ void copyGame(Game * a, Game * b) {
     }
 }
 
-void freeGame(Game * game) {
-    free(game->rounds);
-    free(game->player);
-    for(size_t i = 0; i < game->nCards; i++) {
-        free(game->rounds[i].cards);
+void freeGame(Game * state) {
+    for(size_t i = 0; i < nPlayers; i++) {
+        free(&state->hands[i]);
     }
 
-    for(size_t i = 0; i < nPlayers; i++) {
-        free(game->hands[i]);
+    for(size_t i = 0; i < state->nCards; i++) {
+        free(state->rounds[i].cards);
     }
+    free(state->player);
+    free(state->rounds);
 }
 
 //Prompts for number of players and their hands
@@ -444,8 +444,8 @@ char * minimax(Game game, char round, char playerId) {
         char p;
         char pA[n];
         char rA[n];
+        char * util[n];
         for(int i = 0; i < n; i++) {
-            char * util;
             r = roundOver(successors[i].rounds[round]) ? round + 1 : round;
             //if we're at a new round, the winner of the last goes first
             if(r != round) {
@@ -457,8 +457,14 @@ char * minimax(Game game, char round, char playerId) {
             }
             pA[i] = p;
             rA[i] = r;
-            util = minimax(successors[i], r, p);
-            u[i] = util[playerId];
+            util[i] = minimax(successors[i], r, p);
+//            freeGame(&successors[i]);
+            u[i] = util[i][playerId];
+            //we've got the best move already, stop looking
+            if(util[i][playerId] > 9) {
+                return util[i];
+                //return minimax(successors[i], r, p);
+            }
         }
         //get the node with the greatest minimax value
         char max = 0;
@@ -471,7 +477,8 @@ char * minimax(Game game, char round, char playerId) {
                 r = rA[i];
             }
         }
-        return minimax(successors[action], r, p);
+        return util[action];
+        //return minimax(successors[action], r, p);
 #if 0
         Game s = successors[action];
         for(int i = 0; i < n; i++) {
@@ -489,6 +496,16 @@ void play(Game state) {
     int n;
     //the starting player is 0
     char playerId = 0;
+    char playerIdMachine;
+
+    printf("\nWhich player is the AI,");
+    for(int i = 0; i < nPlayers - 1; i++) {
+        printf(" %d,", i + 1);
+    }
+    printf(" or %d?", (int)nPlayers);
+    char a = getchar(); getchar();
+    playerIdMachine = (a - 48) - 1;
+
 
     successors = (Game *)malloc(sizeof(Game) * game.nCards);
     //there are nCards rounds
@@ -500,8 +517,11 @@ void play(Game state) {
                 char r;
                 p = roundOver(successors[l].rounds[i]) ? getWinner(successors[l].rounds[i]) : (playerId + 1) % nPlayers;
                 r = roundOver(successors[l].rounds[i]) ? i + 1 : i;
-                char * m = minimax(successors[l], r, p);
-                printf("Minimax value of game %d is %d\n", l, m[playerId]);
+                if(playerId == playerIdMachine) {
+                    char * m = minimax(successors[l], r, p);
+                    printf("Minimax value of game %d is %d\n", l, m[playerId]);
+                }
+                printf("Game %d", l);
                 printGame(successors[l]);
             }
             printf("\nWhat move did Player %d pick? ", playerId);
