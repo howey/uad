@@ -519,12 +519,12 @@ void play(Game state) {
                 r = roundOver(successors[l].rounds[i]) ? i + 1 : i;
                 if(playerId == playerIdMachine) {
                     char * m = minimax(successors[l], r, p);
-                    printf("Minimax value of game %d is %d\n", l, m[playerId]);
+                    printf("Minimax value of card %d is %d\n", l, m[playerId]);
                 }
-                printf("Game %d", l);
-                printGame(successors[l]);
+                printf("Move %d, card", l);
+                printf(" %c %c \n", rank2Char(successors[l].rounds[i].cards[playerId].rank), suit2Char(successors[l].rounds[i].cards[playerId].suit));
             }
-            printf("\nWhat move did Player %d pick? ", playerId);
+            printf("\nWhat card did Player %d play? ", playerId);
             char c = getchar(); getchar();
             int g = c - 48;
             game = successors[g];
