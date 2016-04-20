@@ -304,14 +304,15 @@ void copyGame(Game * a, Game * b) {
 
 void freeGame(Game * state) {
     for(size_t i = 0; i < nPlayers; i++) {
-        free(&state->hands[i]);
+        free(state->hands[i]);
     }
+    free(state->hands);
 
     for(size_t i = 0; i < state->nCards; i++) {
         free(state->rounds[i].cards);
     }
-    free(state->player);
     free(state->rounds);
+    free(state->player);
 }
 
 //Prompts for number of players and their hands
@@ -458,12 +459,12 @@ char * minimax(Game game, char round, char playerId) {
             pA[i] = p;
             rA[i] = r;
             util[i] = minimax(successors[i], r, p);
-//            freeGame(&successors[i]);
+            freeGame(&successors[i]);
             u[i] = util[i][playerId];
             //we've got the best move already, stop looking
             if(util[i][playerId] > 9) {
+                free(u);
                 return util[i];
-                //return minimax(successors[i], r, p);
             }
         }
         //get the node with the greatest minimax value
@@ -477,16 +478,9 @@ char * minimax(Game game, char round, char playerId) {
                 r = rA[i];
             }
         }
-        return util[action];
-        //return minimax(successors[action], r, p);
-#if 0
-        Game s = successors[action];
-        for(int i = 0; i < n; i++) {
-            freeGame(&successors[i]);
-        }
+        free(u);
         free(successors);
-        return minimax(s, r, p);
-#endif
+        return util[action];
     }
 }
 
@@ -541,5 +535,6 @@ int main() {
     Game state;
     state = init(NULL);
     play(state);
+    freeGame(&state);
     return 0;
 }
