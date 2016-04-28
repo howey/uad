@@ -475,6 +475,7 @@ char * minimax(Game game, char round, char playerId) {
             //we've got the best move already, stop looking
             if(util[i][playerId] > 9) {
                 free(u);
+                free(successors);
                 return util[i];
             }
         }
@@ -543,6 +544,11 @@ void recommend_bid(Game * state) {
             for(int j = 0; j < n; j++) {
                 char * m = minimax(successors[j], 0, 1);
                 minimax_values[j] += (float)m[0];
+                free(m);
+            }
+
+            for(int j = 0; j < n; j++) {
+                freeGame(&successors[j]);
             }
         }
 
@@ -608,6 +614,7 @@ void play(Game state) {
             r = roundOver(successors[l].rounds[0]) ? 0 + 1 : 0;
             char * m = minimax(successors[l], r, p);
             minimax_values[l] += (float)m[0];
+            free(m);
         }
     }
 
@@ -624,6 +631,8 @@ void play(Game state) {
     }
 
     printf("Suggestion: play %c%c\n", rank2Char((state.hands[0][play_me]).rank), suit2Char((state.hands[0][play_me]).suit));
+
+    free(minimax_values);
 }
 
 int main() {
