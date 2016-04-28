@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 //The number of players
 size_t nPlayers = 3;
@@ -39,6 +40,7 @@ typedef struct {
 
 Game init(Game *); 
 void copyGame(Game *, Game *); 
+void recommend_bid(Game * state);
 
 char cardRank(Card card, char lead, char trump) {
     if(card.suit == trump) {
@@ -363,23 +365,32 @@ Game init(Game * game) {
         state.hands[i] = malloc(sizeof(Card) * state.nCards);
     }
 
-    for(size_t i = 0; i < nPlayers; i++) {
+    //Player 0 is the AI player
+    printf("\nWhat does the AI player have in their hand?");
+    for(size_t j = 0; j < state.nCards; j++) {
+        Card card;
+        printf("\nRank: ");
+        c = getchar(); getchar();
+        card.rank = char2Rank(c);
+        printf("\nSuit: ");
+        c = getchar(); getchar();
+        card.suit = char2Suit(c);
+        state.hands[0][j] = card;
+    }
+
+    for(size_t i = 1; i < nPlayers; i++) {
         printf("\nWhat's Player %zu's bid? ", i + 1);
         c = getchar(); getchar();
         state.player[i].bid = (c - 48);
         state.player[i].id = i;
-        printf("\nAnd what does Player %zu have in their hand?", i + 1);
-        for(size_t j = 0; j < state.nCards; j++) {
-            Card card;
-            printf("\nRank: ");
-            c = getchar(); getchar();
-            card.rank = char2Rank(c);
-            printf("\nSuit: ");
-            c = getchar(); getchar();
-            card.suit = char2Suit(c);
-            state.hands[i][j] = card;
-        }
     }
+
+    recommend_bid(&state);
+
+    printf("What is the AI's bid? ");
+    c = getchar(); getchar();
+    state.player[0].bid = (c - 48);
+    state.player[0].id = 0;
 
     return state;
 }
@@ -484,54 +495,140 @@ char * minimax(Game game, char round, char playerId) {
     }
 }
 
+//Given an initialized game state, assign random hands to each non-AI player
+void random_hand(Game * state) {
+    //If a card has been "drawn", deck[card] == 1
+    int deck[52] = {0};
+    for(int c = 0; c < state->nCards; c++) {
+        char s = state->hands[0][c].suit;
+        char r = state->hands[0][c].rank;
+        deck[4 * s + r - 2]++;
+    }
+    //Generate random hands for every other player (Player 0 is the AI)
+    for(size_t i = 1; i < nPlayers; i++) {
+        for(size_t j = 0; j < state->nCards; j++) {
+            Card card;
+            char s;
+            char r;
+            do {
+                s = rand() % 4;
+                r = rand() % 13;
+            } while (deck[13 * s + r] != 0);
+            deck[13 * s + r]++;
+            card.suit = s;
+            card.rank = (2 + r);
+            state->hands[i][j] = card;
+        }
+    }
+}
+
+void recommend_bid(Game * state) {
+    Game game = init(state);
+    Game * successors = (Game *)malloc(sizeof(Game) * game.nCards);
+    const int iterations = 100;
+    float * minimax_values = (float *)malloc(sizeof(float) * game.nCards);
+    float * bid_values = (float *)malloc(sizeof(float) * (game.nCards + 1));
+
+    for(int b = 0; b < game.nCards + 1; b++) {
+        game.player[0].bid = b;
+
+        for(int i = 0; i < game.nCards; i++) {
+            minimax_values[i] = 0.0f;
+        }
+
+        for(int i = 0; i < iterations; i++) {
+            random_hand(&game);
+            int n = getSuccessors(game, 0, 0, successors, game.nCards);
+
+            for(int j = 0; j < n; j++) {
+                char * m = minimax(successors[j], 0, 1);
+                minimax_values[j] += (float)m[0];
+            }
+        }
+
+        float max = -1.0f;
+        for(int i = 0; i < game.nCards; i++) {
+            minimax_values[i] /= iterations;
+            if(minimax_values[i] > max) {
+                max = minimax_values[i];
+            }
+        }
+
+        bid_values[b] = max;
+    }
+
+    float max = -1.0f;
+    int suggestion = 0;
+    for(int i = 0; i < game.nCards + 1; i++) {
+        if(bid_values[i] > max) {
+            max = bid_values[i];
+            suggestion = i;
+        }
+    }
+    printf("Suggest bidding %d. ", suggestion);
+
+    max = -1.0f;
+    bid_values[suggestion] = -1.0f;
+    for(int i = 0; i < game.nCards + 1; i++) {
+        if(bid_values[i] > max) {
+            max = bid_values[i];
+            suggestion = i;
+        }
+    }
+    printf("Otherwise, bid %d\n", suggestion);
+
+    free(bid_values);
+    free(minimax_values);
+    free(successors);
+    freeGame(&game);
+}
+
 void play(Game state) {
     Game game = state;
     Game * successors;
-    int n;
-    //the starting player is 0
-    char playerId = 0;
-    char playerIdMachine;
-
-    printf("\nWhich player is the AI,");
-    for(int i = 0; i < nPlayers - 1; i++) {
-        printf(" %d,", i + 1);
-    }
-    printf(" or %d?", (int)nPlayers);
-    char a = getchar(); getchar();
-    playerIdMachine = (a - 48) - 1;
-
+    //Empirical measurement showed that after 100 simulations there wasn't much improvement in accuracy
+    //This measurement was with four players with four cards in each hand
+    const int iterations = 100;
 
     successors = (Game *)malloc(sizeof(Game) * game.nCards);
-    //there are nCards rounds
+    float * minimax_values = malloc(sizeof(float) * game.nCards);
+
     for(int i = 0; i < game.nCards; i++) {
-        for(int k = 0; k < nPlayers; k++) {
-            n = getSuccessors(game, i, playerId, successors, game.nCards); 
-            for(int l = 0; l < n; l++) {
-                char p;
-                char r;
-                p = roundOver(successors[l].rounds[i]) ? getWinner(successors[l].rounds[i]) : (playerId + 1) % nPlayers;
-                r = roundOver(successors[l].rounds[i]) ? i + 1 : i;
-                if(playerId == playerIdMachine) {
-                    char * m = minimax(successors[l], r, p);
-                    printf("Minimax value of card %d is %d\n", l, m[playerId]);
-                }
-                printf("Move %d, card", l);
-                printf(" %c %c \n", rank2Char(successors[l].rounds[i].cards[playerId].rank), suit2Char(successors[l].rounds[i].cards[playerId].suit));
-            }
-            printf("\nWhat card did Player %d play? ", playerId);
-            char c = getchar(); getchar();
-            int g = c - 48;
-            game = successors[g];
-            playerId = (playerId + 1) % nPlayers;
-        }
-        playerId = getWinner(game.rounds[i]);
-        printf("\n");
+        minimax_values[i] = 0.0f;
     }
 
+    for(int iter = 0; iter < iterations; iter++) {
+        random_hand(&state);
+
+        int n = getSuccessors(game, 0, 0, successors, game.nCards); 
+        for(int l = 0; l < n; l++) {
+            char p;
+            char r;
+            p = roundOver(successors[l].rounds[0]) ? getWinner(successors[l].rounds[0]) : (0 + 1) % nPlayers;
+            r = roundOver(successors[l].rounds[0]) ? 0 + 1 : 0;
+            char * m = minimax(successors[l], r, p);
+            minimax_values[l] += (float)m[0];
+        }
+    }
+
+    int play_me = 0;
+    float max = -1.0f;
+    for(int i = 0; i < game.nCards; i++) {
+        minimax_values[i] /= iterations;
+        if(minimax_values[i] > max) {
+            max = minimax_values[i];
+            play_me = i;
+        }
+        state.hands[0][i];
+        printf("Minimax value of %c%c is %f\n", rank2Char((state.hands[0][i]).rank), suit2Char((state.hands[0][i]).suit), minimax_values[i]);
+    }
+
+    printf("Suggestion: play %c%c\n", rank2Char((state.hands[0][play_me]).rank), suit2Char((state.hands[0][play_me]).suit));
 }
 
 int main() {
     
+    srand(time(NULL));
     Game state;
     state = init(NULL);
     play(state);
