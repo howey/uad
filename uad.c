@@ -87,12 +87,10 @@ char utility(Game game, Player player) {
     return tricks;
 }
 
-char * utilityVector(Game game) {
-    char * util = (char *)malloc(sizeof(char) * nPlayers);
+void utilityVector(Game game, char * util) {
     for(int i = 0; i < nPlayers; i++) {
         util[i] = utility(game, game.player[i]);
     }
-    return util;
 }
 
 //if the game is in a terminal state, return 1; otherwise, return 0
@@ -444,9 +442,10 @@ char roundOver(Round round) {
 }
 
 //get the minimax value of a node
-char * minimax(Game game, char round, char playerId) {
+void minimax(Game game, char round, char playerId, char * utility) {
     if(isTerminal(game)) {
-        return utilityVector(game);
+        utilityVector(game, utility);
+        return;
     }
     else {
         Game successors[game.nCards];
@@ -456,7 +455,7 @@ char * minimax(Game game, char round, char playerId) {
         char p;
         char pA[n];
         char rA[n];
-        char * util[n];
+        char util[n][nPlayers];
         for(int i = 0; i < n; i++) {
             r = roundOver(successors[i].rounds[round]) ? round + 1 : round;
             //if we're at a new round, the winner of the last goes first
@@ -469,7 +468,7 @@ char * minimax(Game game, char round, char playerId) {
             }
             pA[i] = p;
             rA[i] = r;
-            util[i] = minimax(successors[i], r, p);
+            minimax(successors[i], r, p, util[i]);
             freeGame(&successors[i]);
             u[i] = util[i][playerId];
             //we've got the best move already, stop looking
@@ -477,7 +476,10 @@ char * minimax(Game game, char round, char playerId) {
                 for(int j = i + 1; j < n; j++) {
                     freeGame(&successors[j]);
                 }
-                return util[i];
+                for(int j = 0; j < nPlayers; j++) {
+                    utility[j] = util[i][j];
+                }
+                return;
             }
         }
         //get the node with the greatest minimax value
@@ -491,7 +493,10 @@ char * minimax(Game game, char round, char playerId) {
                 r = rA[i];
             }
         }
-        return util[action];
+        for(int i = 0; i < nPlayers; i++) {
+            utility[i] = util[action][i];
+        }
+        return;
     }
 }
 
@@ -541,9 +546,9 @@ void recommend_bid(Game * state) {
             int n = getSuccessors(game, 0, 0, successors, game.nCards);
 
             for(int j = 0; j < n; j++) {
-                char * m = minimax(successors[j], 0, 1);
+                char m[nPlayers];
+                minimax(successors[j], 0, 1, m);
                 minimax_values[j] += (float)m[0];
-                free(m);
             }
 
             for(int j = 0; j < n; j++) {
@@ -589,7 +594,7 @@ void play(Game state) {
     Game game = state;
     //Empirical measurement showed that after 100 simulations there wasn't much improvement in accuracy
     //This measurement was with four players with four cards in each hand
-    const int iterations = 1000;
+    const int iterations = 100;
 
     Game successors[game.nCards];
     float minimax_values[game.nCards];
@@ -597,6 +602,18 @@ void play(Game state) {
     for(int i = 0; i < game.nCards; i++) {
         minimax_values[i] = 0.0f;
     }
+
+    /*
+    printf("\nWhich player is going first. The AI,");
+    for(int i = 1; i < nPlayers - 1; i++) {
+        printf(" Player %d,", i + 1);
+    }
+    printf(" or Player %d?", (int)nPlayers);
+    char a = getchar(); getchar();
+    int start = (a - 48) - 1;
+
+    printf("What cards have been played so far?\n");
+    */
 
     for(int iter = 0; iter < iterations; iter++) {
         random_hand(&state);
@@ -607,9 +624,12 @@ void play(Game state) {
             char r;
             p = roundOver(successors[l].rounds[0]) ? getWinner(successors[l].rounds[0]) : (0 + 1) % nPlayers;
             r = roundOver(successors[l].rounds[0]) ? 0 + 1 : 0;
-            char * m = minimax(successors[l], r, p);
+            char m[nPlayers];
+            minimax(successors[l], r, p, m);
             minimax_values[l] += (float)m[0];
-            free(m);
+        }
+        for(int i = 0; i < n; i++) {
+            freeGame(&successors[i]);
         }
     }
 
