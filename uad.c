@@ -449,9 +449,9 @@ char * minimax(Game game, char round, char playerId) {
         return utilityVector(game);
     }
     else {
-        Game * successors = (Game *)malloc(sizeof(Game) * game.nCards);
+        Game successors[game.nCards];
         int n = getSuccessors(game, round, playerId, successors, game.nCards); 
-        char * u = (char *)malloc(sizeof(char) * n);
+        char u[n];
         char r;
         char p;
         char pA[n];
@@ -474,8 +474,9 @@ char * minimax(Game game, char round, char playerId) {
             u[i] = util[i][playerId];
             //we've got the best move already, stop looking
             if(util[i][playerId] > 9) {
-                free(u);
-                free(successors);
+                for(int j = i + 1; j < n; j++) {
+                    freeGame(&successors[j]);
+                }
                 return util[i];
             }
         }
@@ -490,8 +491,6 @@ char * minimax(Game game, char round, char playerId) {
                 r = rA[i];
             }
         }
-        free(u);
-        free(successors);
         return util[action];
     }
 }
@@ -525,14 +524,14 @@ void random_hand(Game * state) {
 
 void recommend_bid(Game * state) {
     Game game = init(state);
-    Game * successors = (Game *)malloc(sizeof(Game) * game.nCards);
+    Game successors[game.nCards];
     const int iterations = 100;
-    float * minimax_values = (float *)malloc(sizeof(float) * game.nCards);
-    float * bid_values = (float *)malloc(sizeof(float) * (game.nCards + 1));
+    float bid_values[game.nCards + 1];
 
     for(int b = 0; b < game.nCards + 1; b++) {
         game.player[0].bid = b;
 
+        float minimax_values[game.nCards];
         for(int i = 0; i < game.nCards; i++) {
             minimax_values[i] = 0.0f;
         }
@@ -583,21 +582,17 @@ void recommend_bid(Game * state) {
     }
     printf("Otherwise, bid %d\n", suggestion);
 
-    free(bid_values);
-    free(minimax_values);
-    free(successors);
     freeGame(&game);
 }
 
 void play(Game state) {
     Game game = state;
-    Game * successors;
     //Empirical measurement showed that after 100 simulations there wasn't much improvement in accuracy
     //This measurement was with four players with four cards in each hand
-    const int iterations = 100;
+    const int iterations = 1000;
 
-    successors = (Game *)malloc(sizeof(Game) * game.nCards);
-    float * minimax_values = malloc(sizeof(float) * game.nCards);
+    Game successors[game.nCards];
+    float minimax_values[game.nCards];
 
     for(int i = 0; i < game.nCards; i++) {
         minimax_values[i] = 0.0f;
@@ -632,7 +627,6 @@ void play(Game state) {
 
     printf("Suggestion: play %c%c\n", rank2Char((state.hands[0][play_me]).rank), suit2Char((state.hands[0][play_me]).suit));
 
-    free(minimax_values);
 }
 
 int main() {
